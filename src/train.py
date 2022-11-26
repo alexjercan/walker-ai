@@ -4,12 +4,16 @@ import os
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+from tqdm import tqdm
+
+from agent import Agent, RandomAgent
 
 
 @dataclass
 class Options:
     logdir: str
     agent: str
+    steps: int
 
 
 def _info(opt: Options) -> None:
@@ -31,6 +35,35 @@ def _info(opt: Options) -> None:
 def main(opt: Options) -> None:
     _info(opt)
 
+    from gym.envs.box2d import BipedalWalker
+
+    env = BipedalWalker("human")
+
+    agent = RandomAgent(env)
+    agent.train()
+
+    ep_cnt, step_cnt, done = 0, 0, True
+    pbar = tqdm(total=opt.steps, position=0, leave=True)
+    while step_cnt < opt.steps or not done:
+        if done:
+            ep_cnt += 1
+            s, done = env.reset(), False
+            episode_reward = 0
+
+        a = agent.step(s)
+        s_next, r, terminated, done, info = env.step(a)
+
+        episode_reward += r
+        s = s_next.copy()
+
+        pbar.set_description(
+            f"[Episode {ep_cnt}]: Current reward {episode_reward:.04f}"
+        )
+        pbar.update(1)
+        step_cnt += 1
+
+    agent.save(opt.logdir + "/agent.pkl")
+
 
 def get_options() -> Options:
     parser = argparse.ArgumentParser()
@@ -42,6 +75,14 @@ def get_options() -> Options:
         default="random_agent",
         help="The agent to use",
     )
+    parser.add_argument(
+        "--steps",
+        dest="steps",
+        type=int,
+        metavar="STEPS",
+        default=1_000_000,
+        help="Total number of training steps.",
+    )
 
     args = parser.parse_args()
 
@@ -52,7 +93,11 @@ def get_options() -> Options:
     logdir = os.path.join(logdir, run)
     os.makedirs(logdir, exist_ok=True)
 
-    return Options(logdir=logdir, agent=args.agent)
+    return Options(
+        logdir=logdir,
+        agent=args.agent,
+        steps=args.steps,
+    )
 
 
 if __name__ == "__main__":

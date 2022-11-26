@@ -1,4 +1,14 @@
+box2d-py==2.3.5
 cloudpickle==2.2.0
 gym==0.26.2
 gym-notices==0.0.8
 numpy==1.23.5
+nvidia-cublas-cu11==11.10.3.66
+nvidia-cuda-nvrtc-cu11==11.7.99
+nvidia-cuda-runtime-cu11==11.7.99
+nvidia-cudnn-cu11==8.5.0.96
+pygame==2.1.0
+swig==4.1.0
+torch==1.13.0
+tqdm==4.64.1
+typing_extensions==4.4.0
