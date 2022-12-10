@@ -1,3 +1,4 @@
+import itertools
 import logging
 import os
 
@@ -6,6 +7,7 @@ import gym.wrappers
 import multiprocessing
 import neat
 import pickle
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,14 +36,47 @@ def _info(opt: Options) -> None:
     logging.info(f"Saving results in {opt.logdir} using the {opt} options.")
 
 
-class WalkerAgent:
+class Agent:
+    def __init__(self) -> None:
+        pass
+
+    def act(self, state):
+        raise NotImplementedError()
+
+    def step(self, state):
+        raise NotImplementedError()
+
+    def save(self, path: str) -> None:
+        # TODO: Maybe save agents?
+        pass
+
+
+class FeedForwardAgent(Agent):
+    def __init__(self, genome, config, env, epsilon) -> None:
+        self._net = neat.nn.FeedForwardNetwork.create(genome, config)
+        self._env = env
+        self._epsilon = epsilon
+
+    def act(self, state):
+        return self._net.activate(state)
+
+    def step(self, state):
+        if next(self._epsilon) < random.random():
+            return self.act(state)
+
+        return self._env.action_space.sample()
+
+
+class EvalGenomeBuilder:
     def __init__(self, opt: Options):
         self._steps = opt.steps
 
     def eval_genome(self, genome, config) -> float:
         env = gym.make("BipedalWalker-v3")
 
-        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        epsilon = itertools.repeat(0.1)
+
+        agent = FeedForwardAgent(genome, config, env, epsilon)
 
         fitnesses = []
 
@@ -59,8 +94,7 @@ class WalkerAgent:
                 done = False
                 episode_reward = 0
 
-            # TODO: Maybe we want to also have random actions
-            a = net.activate(s)
+            a = agent.step(s)
             s_next, r, terminated, truncated, info = env.step(a)
 
             done = terminated or truncated
@@ -89,8 +123,8 @@ def main(opt: Options):
     pop.add_reporter(stats)
     pop.add_reporter(neat.StdOutReporter(True))
 
-    wa = WalkerAgent(opt)
-    pe = neat.ParallelEvaluator(multiprocessing.cpu_count(), wa.eval_genome)
+    eg = EvalGenomeBuilder(opt)
+    pe = neat.ParallelEvaluator(multiprocessing.cpu_count(), eg.eval_genome)
     winner = pop.run(pe.evaluate, n=opt.generations)
 
     # Save the winner.
