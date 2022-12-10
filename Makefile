@@ -6,7 +6,9 @@
 
 install: walker.install ## Install
 
-train: walker.train ## Train
+evolve: walker.evolve ## Train
+
+lint: test.lint
 
 export PYTHONPATH=$PYTHONPATH:src
 
