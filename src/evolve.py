@@ -132,6 +132,8 @@ def main(opt: Options):
     stats = neat.StatisticsReporter()
     pop.add_reporter(stats)
     pop.add_reporter(neat.StdOutReporter(True))
+
+    os.makedirs(os.path.join(opt.logdir, "checkpoint"), exist_ok=True)
     pop.add_reporter(
         neat.Checkpointer(
             1,
@@ -227,8 +229,6 @@ def get_options() -> Options:
     run = str(len([f for f in os.scandir(logdir) if f.is_dir()]))
     logdir = os.path.join(logdir, run)
     os.makedirs(logdir, exist_ok=True)
-
-    os.makedirs(os.path.join(logdir, "checkpoint"), exist_ok=True)
 
     return Options(
         logdir=logdir,
