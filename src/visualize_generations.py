@@ -1,17 +1,21 @@
-import gym
+import cv2
+import numpy as np
 import logging
 import os
 
 import argparse
 import glob
+import gym
 import neat
 from dataclasses import dataclass
+from gym.envs.box2d.bipedal_walker import FPS, VIEWPORT_H, VIEWPORT_W
 from neat.six_util import itervalues
 from pathlib import Path
+from reportlab.graphics import renderPM
+from svglib.svglib import svg2rlg
 
 import visualize
 from pygame_recorder import ScreenRecorder
-from gym.envs.box2d.bipedal_walker import VIEWPORT_H, VIEWPORT_W, FPS
 
 
 @dataclass
@@ -46,6 +50,38 @@ def _info(opt: Options) -> None:
     logging.info(f"Loading results from {opt.logdir} using the {opt} options.")
 
 
+def image_resize(image, width = None, height = None, inter = cv2.INTER_AREA):
+    # initialize the dimensions of the image to be resized and
+    # grab the image size
+    dim = None
+    (h, w) = image.shape[:2]
+
+    # if both the width and height are None, then return the
+    # original image
+    if width is None and height is None:
+        return image
+
+    # check to see if the width is None
+    if width is None:
+        # calculate the ratio of the height and construct the
+        # dimensions
+        r = height / float(h)
+        dim = (int(w * r), height)
+
+    # otherwise, the height is None
+    else:
+        # calculate the ratio of the width and construct the
+        # dimensions
+        r = width / float(w)
+        dim = (width, int(h * r))
+
+    # resize the image
+    resized = cv2.resize(image, dim, interpolation = inter)
+
+    # return the resized image
+    return resized
+
+
 def main(opt: Options):
     _info(opt)
 
@@ -60,9 +96,18 @@ def main(opt: Options):
     checkpoint_paths = glob.glob(
         os.path.join(opt.logdir, "checkpoint", "neat-checkpoint-*")
     )
+    checkpoint_paths = sorted(checkpoint_paths, key=lambda n: int(n.split("-")[-1]))
+
+    VIEWPORT_H = 1080
+    VIEWPORT_W = 1920
 
     env = gym.make("BipedalWalker-v3", render_mode="human")
-    recorder = ScreenRecorder(VIEWPORT_W, VIEWPORT_H, FPS, out_file=os.path.join(opt.logdir, "visualization", "output.avi"))
+    recorder = ScreenRecorder(
+        VIEWPORT_W,
+        VIEWPORT_H,
+        FPS,
+        out_file=os.path.join(opt.logdir, "visualization", "output.avi"),
+    )
 
     for checkpoint_path in checkpoint_paths:
         name = Path(checkpoint_path).name
@@ -76,51 +121,40 @@ def main(opt: Options):
             if winner is None or (g.fitness is not None and g.fitness > winner.fitness):
                 winner = g
 
-        node_names = (
-            {
-                -1: "hull_angle",
-                -2: "hull_angularVelocity",
-                -3: "vel_x",
-                -4: "vel_y",
-                -5: "hip_joint_1_angle",
-                -6: "hip_joint_1_speed",
-                -7: "knee_joint_1_angle",
-                -8: "knee_joint_1_speed",
-                -9: "leg_1_ground_contact_flag",
-                -10: "hip_joint_2_angle",
-                -11: "hip_joint_2_speed",
-                -12: "knee_joint_2_angle",
-                -13: "knee_joint_2_speed",
-                -14: "leg_2_ground_contact_flag",
-            }
-            | {(-i - 15): f"lidar{i}" for i in range(10)}
-            | {0: "hip_1", 1: "knee_1", 2: "hip_2", 3: "knee_2"}
-        )
+        node_names = {0: "hip_1", 1: "knee_1", 2: "hip_2", 3: "knee_2"}
         visualize.draw_net(
             config,
             winner,
             view=False,
             node_names=node_names,
-            filename=os.path.join(opt.logdir, "visualization", f"{name}-feedforward.gv"),
+            filename=os.path.join(
+                opt.logdir, "visualization", f"{name}-feedforward.gv"
+            ),
         )
-        visualize.draw_net(
-            config,
-            winner,
-            view=False,
-            node_names=node_names,
-            filename=os.path.join(opt.logdir, "visualization", f"{name}-feedforward-enabled-pruned.gv"),
-            prune_unused=True,
+
+        net_img = svg2rlg(
+            os.path.join(opt.logdir, "visualization", f"{name}-feedforward.gv.svg")
         )
+        net_img = renderPM.drawToPIL(net_img, dpi=144)
+        net_img = np.array(net_img)[:, :, ::-1]
+
+        net_img = image_resize(net_img, width=VIEWPORT_W*3//4)
+
+        image_extended = np.ones((VIEWPORT_H, VIEWPORT_W, 3), dtype=net_img.dtype) * 255
+        image_extended[:net_img.shape[0], -net_img.shape[1]:] = net_img[:VIEWPORT_H, :VIEWPORT_W, :]
+
+        net_img = image_extended
 
         net = neat.nn.FeedForwardNetwork.create(winner, config)
 
         s, _ = env.reset()
         done = False
+        generation = name.split("-")[-1]
 
         try:
             while not done:
                 env.render()
-                recorder.capture_frame(env.screen)
+                recorder.capture_frame(env.screen, text=f"Generation: {generation}", overlay=net_img)
 
                 a = net.activate(s)
                 s_next, r, terminated, truncated, info = env.step(a)

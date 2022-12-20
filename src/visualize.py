@@ -136,7 +136,7 @@ def draw_net(
 
     assert type(node_colors) is dict
 
-    node_attrs = {"shape": "circle", "fontsize": "9", "height": "0.2", "width": "0.2"}
+    node_attrs = {"shape": "circle", "fontsize": "20", "height": "1.0", "width": "0.5"}
 
     dot = graphviz.Digraph(format=fmt, node_attr=node_attrs)
 
@@ -146,8 +146,8 @@ def draw_net(
         name = node_names.get(k, str(k))
         input_attrs = {
             "style": "filled",
-            "shape": "box",
-            "fillcolor": node_colors.get(k, "lightgray"),
+            "shape": "rectangle",
+            "fillcolor": node_colors.get(k, "lightgreen"),
         }
         dot.node(name, _attributes=input_attrs)
 
@@ -176,7 +176,7 @@ def draw_net(
             b = node_names.get(output, str(output))
             style = "solid" if cg.enabled else "dotted"
             color = "green" if cg.weight > 0 else "red"
-            width = str(0.1 + abs(cg.weight / 5.0))
+            width = str(0.5 + abs(cg.weight / 5.0))
             dot.edge(
                 a, b, _attributes={"style": style, "color": color, "penwidth": width}
             )
