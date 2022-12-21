@@ -86,11 +86,55 @@ def image_resize(image, width = None, height = None, inter = cv2.INTER_AREA):
     return resized
 
 
-def play_genome(genome):
-    pass
+def play_genome(config, winner, env, recorder, logdir, generation, steps=1000, viewport=(VIEWPORT_H, VIEWPORT_W)):
+    node_names = {0: "hip_1", 1: "knee_1", 2: "hip_2", 3: "knee_2"}
+    visualize.draw_net(
+        config,
+        winner,
+        view=False,
+        node_names=node_names,
+        filename=os.path.join(
+            logdir, "visualization", f"{generation}-feedforward.gv"
+        ),
+    )
+
+    net_img = svg2rlg(
+        os.path.join(logdir, "visualization", f"{generation}-feedforward.gv.svg")
+    )
+    net_img = renderPM.drawToPIL(net_img, dpi=144)
+    net_img = np.array(net_img)[:, :, ::-1]
+    net_img = image_resize(net_img, width=viewport[1]*3//4)
+    image_extended = np.ones((*viewport, 3), dtype=net_img.dtype) * 255
+    image_extended[:net_img.shape[0], -net_img.shape[1]:] = net_img[:viewport[0], :viewport[1], :]
+    net_img = image_extended
+
+    net = neat.nn.FeedForwardNetwork.create(winner, config)
+
+    s, _ = env.reset()
+    step_cnt = 0
+    done = False
+    episode_reward = 0
+
+    while step_cnt < steps and not done:
+        env.render()
+        recorder.capture_frame(env.screen, text=f"Generation: {generation}\nReward: {episode_reward:.02f}", overlay=net_img)
+
+        a = net.activate(s)
+        s_next, r, terminated, truncated, info = env.step(a)
+
+        done = terminated or truncated
+
+        episode_reward += r
+        s = s_next.copy()
+
+        step_cnt += 1
+
 
 def main(opt: Options):
     _info(opt)
+
+    VIEWPORT_H = 1080
+    VIEWPORT_W = 1920
 
     config = neat.Config(
         neat.DefaultGenome,
@@ -105,9 +149,6 @@ def main(opt: Options):
     )
     checkpoint_paths = sorted(checkpoint_paths, key=lambda n: int(n.split("-")[-1]))
 
-    VIEWPORT_H = 1080
-    VIEWPORT_W = 1920
-
     env = gym.make("BipedalWalker-v3", render_mode="human")
     recorder = ScreenRecorder(
         VIEWPORT_W,
@@ -116,10 +157,10 @@ def main(opt: Options):
         out_file=os.path.join(opt.logdir, "visualization", "output.mp4"),
     )
 
-    pbar = tqdm(total=opt.steps * len(checkpoint_paths), position=0, leave=True)
-
+    pbar = tqdm(total=len(checkpoint_paths), position=0, leave=True)
     for checkpoint_path in checkpoint_paths:
         name = Path(checkpoint_path).name
+        generation = name.split("-")[-1]
 
         logging.info(f"Using {name} population")
 
@@ -130,58 +171,12 @@ def main(opt: Options):
             if winner is None or (g.fitness is not None and g.fitness > winner.fitness):
                 winner = g
 
-        node_names = {0: "hip_1", 1: "knee_1", 2: "hip_2", 3: "knee_2"}
-        visualize.draw_net(
-            config,
-            winner,
-            view=False,
-            node_names=node_names,
-            filename=os.path.join(
-                opt.logdir, "visualization", f"{name}-feedforward.gv"
-            ),
-        )
-
-        net_img = svg2rlg(
-            os.path.join(opt.logdir, "visualization", f"{name}-feedforward.gv.svg")
-        )
-        net_img = renderPM.drawToPIL(net_img, dpi=144)
-        net_img = np.array(net_img)[:, :, ::-1]
-
-        net_img = image_resize(net_img, width=VIEWPORT_W*3//4)
-
-        image_extended = np.ones((VIEWPORT_H, VIEWPORT_W, 3), dtype=net_img.dtype) * 255
-        image_extended[:net_img.shape[0], -net_img.shape[1]:] = net_img[:VIEWPORT_H, :VIEWPORT_W, :]
-
-        net_img = image_extended
-
-        net = neat.nn.FeedForwardNetwork.create(winner, config)
-
-        s, _ = env.reset()
-        step_cnt = 0
-        done = False
-        episode_reward = 0
-        generation = name.split("-")[-1]
-
         try:
-            while step_cnt < opt.steps and not done:
-                env.render()
-                recorder.capture_frame(env.screen, text=f"Generation: {generation}\nReward: {episode_reward:.02f}", overlay=net_img)
-
-                a = net.activate(s)
-                s_next, r, terminated, truncated, info = env.step(a)
-
-                done = terminated or truncated
-
-                episode_reward += r
-                s = s_next.copy()
-
-                step_cnt += 1
-                pbar.update(1)
-
+            play_genome(config, winner, env, recorder, opt.logdir, generation, opt.steps, viewport=(VIEWPORT_H, VIEWPORT_W))
         except KeyboardInterrupt:
             pass
 
-        pbar.update(opt.steps - step_cnt)
+        pbar.update(1)
     recorder.end_recording()
 
 

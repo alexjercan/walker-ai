@@ -164,7 +164,7 @@ def draw_net(
         if n in inputs or n in outputs:
             continue
 
-        attrs = {"style": "filled", "fillcolor": node_colors.get(n, "white")}
+        attrs = {"style": "filled", "fillcolor": node_colors.get(n, "pink")}
         dot.node(str(n), _attributes=attrs)
 
     for cg in genome.connections.values():
