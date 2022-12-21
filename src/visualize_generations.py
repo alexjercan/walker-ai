@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import logging
 import os
+from tqdm.auto import tqdm
 
 import argparse
 import glob
@@ -28,10 +29,13 @@ class Options:
         path to load the results from
     config : str
         path to the config.ini file with the definitions of the genome
+    steps : int
+        maximum number of steps to run the evaluation of the genome on the environmnet
     """
 
     logdir: str
     config: str
+    steps: int
 
 
 def _info(opt: Options) -> None:
@@ -82,6 +86,9 @@ def image_resize(image, width = None, height = None, inter = cv2.INTER_AREA):
     return resized
 
 
+def play_genome(genome):
+    pass
+
 def main(opt: Options):
     _info(opt)
 
@@ -106,8 +113,10 @@ def main(opt: Options):
         VIEWPORT_W,
         VIEWPORT_H,
         FPS,
-        out_file=os.path.join(opt.logdir, "visualization", "output.avi"),
+        out_file=os.path.join(opt.logdir, "visualization", "output.mp4"),
     )
+
+    pbar = tqdm(total=opt.steps * len(checkpoint_paths), position=0, leave=True)
 
     for checkpoint_path in checkpoint_paths:
         name = Path(checkpoint_path).name
@@ -148,24 +157,31 @@ def main(opt: Options):
         net = neat.nn.FeedForwardNetwork.create(winner, config)
 
         s, _ = env.reset()
+        step_cnt = 0
         done = False
+        episode_reward = 0
         generation = name.split("-")[-1]
 
         try:
-            while not done:
+            while step_cnt < opt.steps and not done:
                 env.render()
-                recorder.capture_frame(env.screen, text=f"Generation: {generation}", overlay=net_img)
+                recorder.capture_frame(env.screen, text=f"Generation: {generation}\nReward: {episode_reward:.02f}", overlay=net_img)
 
                 a = net.activate(s)
                 s_next, r, terminated, truncated, info = env.step(a)
 
                 done = terminated or truncated
 
+                episode_reward += r
                 s = s_next.copy()
 
-        except KeyboardInterrupt:
-            continue
+                step_cnt += 1
+                pbar.update(1)
 
+        except KeyboardInterrupt:
+            pass
+
+        pbar.update(opt.steps - step_cnt)
     recorder.end_recording()
 
 
@@ -173,6 +189,14 @@ def get_options() -> Options:
     parser = argparse.ArgumentParser()
     parser.add_argument("--logdir", dest="logdir", type=str, default="logdir/0")
     parser.add_argument("--config", dest="config", type=str, default="config.ini")
+    parser.add_argument(
+        "--steps",
+        dest="steps",
+        type=int,
+        metavar="STEPS",
+        default=1_000,
+        help="Total number of training steps.",
+    )
 
     args = parser.parse_args()
 
@@ -183,6 +207,7 @@ def get_options() -> Options:
     return Options(
         logdir=logdir,
         config=args.config,
+        steps=args.steps,
     )
 
 

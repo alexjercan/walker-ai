@@ -155,12 +155,12 @@ def main(opt: Options):
         stats,
         ylog=True,
         view=True,
-        filename=os.path.join(opt.logdir, "feedforward-fitness.svg"),
+        filename=os.path.join(opt.logdir, "feedforward-fitness.png"),
     )
     visualize.plot_species(
         stats,
         view=True,
-        filename=os.path.join(opt.logdir, "feedforward-speciation.svg"),
+        filename=os.path.join(opt.logdir, "feedforward-speciation.png"),
     )
 
     node_names = (

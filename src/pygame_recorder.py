@@ -43,16 +43,18 @@ class ScreenRecorder:
         pixels = cv2.flip(pixels, 1)
         pixels = cv2.cvtColor(pixels, cv2.COLOR_RGB2BGR)
 
-        pixels = cv2.putText(
-            pixels,
-            text,
-            org=(10, 50),
-            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=1,
-            color=(0, 0, 0),
-            thickness=1,
-            lineType=cv2.LINE_AA,
-        )
+        for i, line in enumerate(text.split('\n')):
+            y = 50 + i*50
+            pixels = cv2.putText(
+                pixels,
+                line,
+                org=(10, y),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=1,
+                color=(0, 0, 0),
+                thickness=2,
+                lineType=cv2.LINE_AA,
+            )
 
         pixels = np.where(overlay == [255, 255, 255], pixels, overlay)
 
