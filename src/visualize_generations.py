@@ -31,11 +31,14 @@ class Options:
         path to the config.ini file with the definitions of the genome
     steps : int
         maximum number of steps to run the evaluation of the genome on the environmnet
+    hardcore : bool
+        play the game in hardcore
     """
 
     logdir: str
     config: str
     steps: int
+    hardcore: bool
 
 
 def _info(opt: Options) -> None:
@@ -149,12 +152,16 @@ def main(opt: Options):
     )
     checkpoint_paths = sorted(checkpoint_paths, key=lambda n: int(n.split("-")[-1]))
 
-    env = gym.make("BipedalWalker-v3", render_mode="human")
+    env = gym.make("BipedalWalker-v3", render_mode="human", hardcore=opt.hardcore)
+
+    visualization_dir = "visualization" + ("_hardcore" if opt.hardcore else "_normal")
+    os.makedirs(os.path.join(opt.logdir, visualization_dir), exist_ok=True)
+
     recorder = ScreenRecorder(
         VIEWPORT_W,
         VIEWPORT_H,
         FPS,
-        out_file=os.path.join(opt.logdir, "visualization", "output.mp4"),
+        out_file=os.path.join(opt.logdir, visualization_dir, "output.mp4"),
     )
 
     pbar = tqdm(total=len(checkpoint_paths), position=0, leave=True)
@@ -171,8 +178,52 @@ def main(opt: Options):
             if winner is None or (g.fitness is not None and g.fitness > winner.fitness):
                 winner = g
 
+        node_names = {0: "hip_1", 1: "knee_1", 2: "hip_2", 3: "knee_2"}
+        visualize.draw_net(
+            config,
+            winner,
+            view=False,
+            node_names=node_names,
+            filename=os.path.join(
+                opt.logdir, visualization_dir, f"{name}-feedforward.gv"
+            ),
+        )
+
+        net_img = svg2rlg(
+            os.path.join(opt.logdir, visualization_dir, f"{name}-feedforward.gv.svg")
+        )
+        net_img = renderPM.drawToPIL(net_img, dpi=144)
+        net_img = np.array(net_img)[:, :, ::-1]
+
+        net_img = image_resize(net_img, width=VIEWPORT_W*3//4)
+
+        image_extended = np.ones((VIEWPORT_H, VIEWPORT_W, 3), dtype=net_img.dtype) * 255
+        image_extended[:net_img.shape[0], -net_img.shape[1]:] = net_img[:VIEWPORT_H, :VIEWPORT_W, :]
+
+        net_img = image_extended
+
+        net = neat.nn.FeedForwardNetwork.create(winner, config)
+
+        s, _ = env.reset()
+        step_cnt = 0
+        done = False
+        episode_reward = 0
+
         try:
-            play_genome(config, winner, env, recorder, opt.logdir, generation, opt.steps, viewport=(VIEWPORT_H, VIEWPORT_W))
+            while step_cnt < opt.steps and not done:
+                env.render()
+                recorder.capture_frame(env.screen, text=f"Generation: {generation}\nReward: {episode_reward:.02f}", overlay=net_img)
+
+                a = net.activate(s)
+                s_next, r, terminated, truncated, info = env.step(a)
+
+                done = terminated or truncated
+
+                episode_reward += r
+                s = s_next.copy()
+
+                step_cnt += 1
+
         except KeyboardInterrupt:
             pass
 
@@ -192,17 +243,17 @@ def get_options() -> Options:
         default=1_000,
         help="Total number of training steps.",
     )
+    parser.add_argument("--hardcore", dest="hardcore", action="store_true", default=False)
 
     args = parser.parse_args()
 
     logdir = args.logdir
 
-    os.makedirs(os.path.join(logdir, "visualization"), exist_ok=True)
-
     return Options(
         logdir=logdir,
         config=args.config,
         steps=args.steps,
+        hardcore=args.hardcore,
     )
 
 
