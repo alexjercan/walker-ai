@@ -12,6 +12,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import visualize
+import bipedal_walker
+from typing import Optional
+
+from gym.envs.registration import register
+
+register(
+    id="BipedalWalker-v4",
+    entry_point="bipedal_walker:BipedalWalker",
+    max_episode_steps=1600,
+    reward_threshold=300,
+)
 
 
 @dataclass
@@ -31,6 +42,7 @@ class Options:
     """
 
     logdir: str
+    resume: Optional[str]
     config: str
     steps: int
     generations: int
@@ -78,7 +90,7 @@ class EvalGenomeBuilder:
         """
 
         # initialize the env
-        env = gym.make("BipedalWalker-v3")
+        env = gym.make("BipedalWalker-v4")
         # initialize the phenotype (feed forward network)
         net = neat.nn.FeedForwardNetwork.create(genome, config)
 
@@ -126,7 +138,10 @@ def main(opt: Options):
     )
 
     # create a population
-    pop = neat.Population(config)
+    if opt.resume is not None:
+        pop = neat.Checkpointer.restore_checkpoint(opt.resume)
+    else:
+        pop = neat.Population(config)
 
     # create a stats reporter for nice logging
     stats = neat.StatisticsReporter()
@@ -203,6 +218,7 @@ def main(opt: Options):
 def get_options() -> Options:
     parser = argparse.ArgumentParser()
     parser.add_argument("--logdir", dest="logdir", type=str, default="logdir/")
+    parser.add_argument("--resume", dest="resume", type=str, default=None)
     parser.add_argument("--config", dest="config", type=str, default="config.ini")
     parser.add_argument(
         "--steps",
@@ -232,6 +248,7 @@ def get_options() -> Options:
 
     return Options(
         logdir=logdir,
+        resume=args.resume,
         config=args.config,
         steps=args.steps,
         generations=args.generations,

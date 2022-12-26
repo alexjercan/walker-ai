@@ -18,6 +18,15 @@ from svglib.svglib import svg2rlg
 import visualize
 from pygame_recorder import ScreenRecorder
 
+from gym.envs.registration import register
+
+register(
+    id="BipedalWalker-v4",
+    entry_point="bipedal_walker:BipedalWalker",
+    max_episode_steps=1600,
+    reward_threshold=300,
+)
+
 
 @dataclass
 class Options:
@@ -152,7 +161,7 @@ def main(opt: Options):
     )
     checkpoint_paths = sorted(checkpoint_paths, key=lambda n: int(n.split("-")[-1]))
 
-    env = gym.make("BipedalWalker-v3", render_mode="human", hardcore=opt.hardcore)
+    env = gym.make("BipedalWalker-v4", render_mode="human", hardcore=opt.hardcore)
 
     visualization_dir = "visualization" + ("_hardcore" if opt.hardcore else "_normal")
     os.makedirs(os.path.join(opt.logdir, visualization_dir), exist_ok=True)
