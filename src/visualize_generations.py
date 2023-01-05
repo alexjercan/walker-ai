@@ -1,24 +1,22 @@
-import cv2
-import numpy as np
 import logging
 import os
-from tqdm.auto import tqdm
 
 import argparse
+import cv2
 import glob
 import gym
 import neat
+import numpy as np
 from dataclasses import dataclass
-from gym.envs.box2d.bipedal_walker import FPS, VIEWPORT_H, VIEWPORT_W
+from gym.envs.registration import register
 from neat.six_util import itervalues
 from pathlib import Path
 from reportlab.graphics import renderPM
 from svglib.svglib import svg2rlg
+from tqdm.auto import tqdm
 
 import visualize
 from pygame_recorder import ScreenRecorder
-
-from gym.envs.registration import register
 
 register(
     id="BipedalWalker-v4",
@@ -66,7 +64,7 @@ def _info(opt: Options) -> None:
     logging.info(f"Loading results from {opt.logdir} using the {opt} options.")
 
 
-def image_resize(image, width = None, height = None, inter = cv2.INTER_AREA):
+def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
     # initialize the dimensions of the image to be resized and
     # grab the image size
     dim = None
@@ -92,54 +90,10 @@ def image_resize(image, width = None, height = None, inter = cv2.INTER_AREA):
         dim = (width, int(h * r))
 
     # resize the image
-    resized = cv2.resize(image, dim, interpolation = inter)
+    resized = cv2.resize(image, dim, interpolation=inter)
 
     # return the resized image
     return resized
-
-
-def play_genome(config, winner, env, recorder, logdir, generation, steps=1000, viewport=(VIEWPORT_H, VIEWPORT_W)):
-    node_names = {0: "hip_1", 1: "knee_1", 2: "hip_2", 3: "knee_2"}
-    visualize.draw_net(
-        config,
-        winner,
-        view=False,
-        node_names=node_names,
-        filename=os.path.join(
-            logdir, "visualization", f"{generation}-feedforward.gv"
-        ),
-    )
-
-    net_img = svg2rlg(
-        os.path.join(logdir, "visualization", f"{generation}-feedforward.gv.svg")
-    )
-    net_img = renderPM.drawToPIL(net_img, dpi=144)
-    net_img = np.array(net_img)[:, :, ::-1]
-    net_img = image_resize(net_img, width=viewport[1]*3//4)
-    image_extended = np.ones((*viewport, 3), dtype=net_img.dtype) * 255
-    image_extended[:net_img.shape[0], -net_img.shape[1]:] = net_img[:viewport[0], :viewport[1], :]
-    net_img = image_extended
-
-    net = neat.nn.FeedForwardNetwork.create(winner, config)
-
-    s, _ = env.reset()
-    step_cnt = 0
-    done = False
-    episode_reward = 0
-
-    while step_cnt < steps and not done:
-        env.render()
-        recorder.capture_frame(env.screen, text=f"Generation: {generation}\nReward: {episode_reward:.02f}", overlay=net_img)
-
-        a = net.activate(s)
-        s_next, r, terminated, truncated, info = env.step(a)
-
-        done = terminated or truncated
-
-        episode_reward += r
-        s = s_next.copy()
-
-        step_cnt += 1
 
 
 def main(opt: Options):
@@ -147,6 +101,7 @@ def main(opt: Options):
 
     VIEWPORT_H = 1080
     VIEWPORT_W = 1920
+    FPS = 50
 
     config = neat.Config(
         neat.DefaultGenome,
@@ -204,10 +159,12 @@ def main(opt: Options):
         net_img = renderPM.drawToPIL(net_img, dpi=144)
         net_img = np.array(net_img)[:, :, ::-1]
 
-        net_img = image_resize(net_img, width=VIEWPORT_W*3//4)
+        net_img = image_resize(net_img, width=VIEWPORT_W * 3 // 4)
 
         image_extended = np.ones((VIEWPORT_H, VIEWPORT_W, 3), dtype=net_img.dtype) * 255
-        image_extended[:net_img.shape[0], -net_img.shape[1]:] = net_img[:VIEWPORT_H, :VIEWPORT_W, :]
+        image_extended[: net_img.shape[0], -net_img.shape[1] :] = net_img[
+            :VIEWPORT_H, :VIEWPORT_W, :
+        ]
 
         net_img = image_extended
 
@@ -221,7 +178,11 @@ def main(opt: Options):
         try:
             while step_cnt < opt.steps and not done:
                 env.render()
-                recorder.capture_frame(env.screen, text=f"Generation: {generation}\nReward: {episode_reward:.02f}", overlay=net_img)
+                recorder.capture_frame(
+                    env.screen,
+                    text=f"Generation: {generation}\nReward: {episode_reward:.02f}",
+                    overlay=net_img,
+                )
 
                 a = net.activate(s)
                 s_next, r, terminated, truncated, info = env.step(a)
@@ -252,7 +213,9 @@ def get_options() -> Options:
         default=1_000,
         help="Total number of training steps.",
     )
-    parser.add_argument("--hardcore", dest="hardcore", action="store_true", default=False)
+    parser.add_argument(
+        "--hardcore", dest="hardcore", action="store_true", default=False
+    )
 
     args = parser.parse_args()
 

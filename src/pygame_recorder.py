@@ -1,5 +1,5 @@
-import numpy as np
 import cv2
+import numpy as np
 import pygame
 
 
@@ -27,7 +27,7 @@ class ScreenRecorder:
         self.height = height
         self.video = cv2.VideoWriter(out_file, four_cc, float(fps), (width, height))
 
-    def capture_frame(self, surf, text, overlay):
+    def capture_frame(self, surf, text=None, overlay=None):
         """
          Call this method every frame, pass in the pygame surface to capture.
         :param surf: pygame surface to capture
@@ -43,20 +43,22 @@ class ScreenRecorder:
         pixels = cv2.flip(pixels, 1)
         pixels = cv2.cvtColor(pixels, cv2.COLOR_RGB2BGR)
 
-        for i, line in enumerate(text.split('\n')):
-            y = 50 + i*50
-            pixels = cv2.putText(
-                pixels,
-                line,
-                org=(10, y),
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                fontScale=1,
-                color=(0, 0, 0),
-                thickness=2,
-                lineType=cv2.LINE_AA,
-            )
+        if text is not None:
+            for i, line in enumerate(text.split("\n")):
+                y = 50 + i * 50
+                pixels = cv2.putText(
+                    pixels,
+                    line,
+                    org=(10, y),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                    fontScale=1,
+                    color=(0, 0, 0),
+                    thickness=2,
+                    lineType=cv2.LINE_AA,
+                )
 
-        pixels = np.where(overlay == [255, 255, 255], pixels, overlay)
+        if overlay is not None:
+            pixels = np.where(overlay == [255, 255, 255], pixels, overlay)
 
         # write the frame
         self.video.write(pixels)
@@ -68,9 +70,3 @@ class ScreenRecorder:
         """
         # stop recording
         self.video.release()
-
-
-# References
-#   For more tutorials on cv2.VideoWriter, go to:
-#   - https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_gui/py_video_display/py_video_display.html#display-video
-#   - https://medium.com/@enriqueav/how-to-create-video-animations-using-python-and-opencv-881b18e41397

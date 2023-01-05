@@ -1,4 +1,3 @@
-import itertools
 import logging
 import os
 
@@ -7,15 +6,12 @@ import gym.wrappers
 import multiprocessing
 import neat
 import pickle
-import random
 from dataclasses import dataclass
+from gym.envs.registration import register
 from pathlib import Path
-
-import visualize
-import bipedal_walker
 from typing import Optional
 
-from gym.envs.registration import register
+import visualize
 
 register(
     id="BipedalWalker-v4",
