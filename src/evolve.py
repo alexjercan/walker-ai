@@ -19,6 +19,7 @@ register(
     max_episode_steps=1600,
     reward_threshold=300,
 )
+STATE_GROUND_DISTANCE_INDEX = 14
 
 
 @dataclass
@@ -110,6 +111,11 @@ class EvalGenomeBuilder:
             a = net.activate(s)
             s_next, r, terminated, truncated, info = env.step(a)
 
+            distance = s_next[STATE_GROUND_DISTANCE_INDEX]
+            if distance >= 0.3:
+                r += 0.05
+            else:
+                r -= 0.01
             done = terminated or truncated
 
             episode_reward += r
